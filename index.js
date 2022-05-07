@@ -9,17 +9,36 @@ app.use(express.json())
 app.get("/",(req,res)=>{
     res.send('server started')
 });
+// jwt 2nd step
+function verifyToken(req,res,next){
+    const authToken=req.headers.authorization;
+    if(!authToken){
+      return res.status(401).send({maessege:"un authorized"})
+    }
+    const token=authToken.split(" ")[1]
+    jwt.verify(token,process.env.ACCESS_TOKEN,(err,decoded)=>{
+        if(err){
+            return res.status(403).send({messege: "forbidden access"})
+        }
+        req.decoded=decoded;
+        next();    
+        // jodi valid auth taile next hobe
+    })
+    
+   
 
+}
 // get data from server
 
 
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion,ObjectId} = require('mongodb');
 const uri = `mongodb+srv://doctor-web:${process.env.DOCTOR_PASSWORD}@cluster0.hrgbo.mongodb.net/myFirstDatabase?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
 async function run() {
     try {
       await client.connect();
-      const doctorCollection=client.db('doctor-web').collection('doctor-profile')
+      const doctorCollection=client.db('doctor-web').collection('doctor-profile');
+      const orderCollection=client.db('doctor-web').collection('order')
       app.get('/services',async(req,res)=>{
           const query={}
           const cursor=doctorCollection.find(query);
@@ -59,17 +78,23 @@ async function run() {
     
     })
     
-    // get order
-    app.get('/order',async(req,res)=>{
-        const search=req.query.email;
-    
-        const query={email:search};
-        const cursor=orderCollection.find(query);
-        const order=await cursor.toArray();
-        res.send(order)
-        console.log(search)
+    // get order 3rd step
+    app.get('/order',verifyToken,async(req,res)=>{
+        const decodeEmail=req.decoded.email;
+        console.log(decodeEmail)
+        const email=req.query.email;
+        if(email===decodeEmail){
+            const query={email:email};
+            const cursor=orderCollection.find(query);
+            const order=await cursor.toArray();
+            res.send(order)
+            
+        }else{
+            res.status(403).send({messege:'forbidden access'})
+        }
+       
     })
-//  token
+//  token 1step
     app.post('/login',(req,res)=>{
       const user=req.body;
       const accessToken=jwt.sign(user,process.env.ACCESS_TOKEN,{expiresIn:'1d'})
